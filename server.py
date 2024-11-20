@@ -1,73 +1,127 @@
-import socket
-import threading
 
-HEADER = 64
+import asyncio
+import json
+import pprint
+import random
+import websockets
+
+###########################################
+###########################################
+###########################################
+###########################################
+#                   Styling Guidlines:
+# For functions: use capital letters for the first letter of each word. ex: NameFunc().
+# For variables: use standard camel case. ex: nameVar.
+###########################################
+###########################################
+###########################################
+###########################################
+
 PORT = 5050
-SERVER = socket.gethostbyname(socket.gethostname()) # Get the IP of current machine
-ADDR = (SERVER, PORT)
-FORMAT = 'utf-8'
 DISCONNECT_MESSAGE = "!DISCONNECT"
 
-auctionItems = {
-    "Item1": {"price": 100, "units": 20},
-    "Item2": {"price": 200, "units": 15},
-    "Item3": {"price": 250, "units": 18},
-    "Item4": {"price": 50, "units": 24},
-    "Item5": {"price": 175, "units": 24},
-    "Item6": {"price": 340, "units": 16},
-    "Item7": {"price": 110, "units": 31},
-    "Item8": {"price": 210, "units": 12},
-    "Item9": {"price": 200, "units": 6},
-    "Item10": {"price": 160, "units": 40},
-}
+connectedClients = set() # Set of currently connected clients
+auctionItems = []
+
+async def InventoryGenerator():
+    items = {}
+
+    for i in range(random.randint(10, 20)): # Sets range of number of items from 10 to 20.
+        itemName = f"Item_{i + 1}" # What item number being displayed.
+        
+        initialPrice = random.randint(50, 500) # Set random initial price between 50 and 500.
+
+        initialUnits = random.randint(15, 150) # Set random  initial units between 15 and 150.
+        
+        items[itemName] = { # Dictionary for all items, their price and units associated.
+            "price": initialPrice,
+            "units": initialUnits
+        }
+        
+    pprint.pprint(items)
+    return items
+
+async def BroadcastItems(itemName, itemDetail):
+    auctionState = {
+        "type": "auctionState",
+        "items": [
+            {"name": itemName, "price": details["initialPrice"], "units": details["initialUnits"]}
+            for itemName, details in auctionItems.items()
+        ]
+    }
+    msg = json.dumps(auctionState)
+    if connectedClients:
+        await asyncio.wait([client.send(msg) for client in connectedClients])
+    print("[BROADCAST] Current auction state is sent to all clients")
+    
+async def UpdateBroadcast():
+    while True:
+        await BroadcastItems("", auctionItems)
+        await asyncio.sleep(1)
 """
 Updating Bids:
 
     When a bid is received, check if its higher than the current price for the item.
     If the bid is valid and there are units left, update the items price and decrement the unit count.
 
-"""
-def handle_bid(item, bid_amount):
-    if item in auctionItems and auctionItems[item]["units"] > 0:
-        if bid_amount > auctionItems[item]["price"]:
-            auctionItems[item]["price"] = bid_amount  # Update to new highest bid
-            auctionItems[item]["units"] -= 1          # Decrease available units
-            return True  # Bid accepted
-    return False  # Bid rejected or item out of stock
+"""    
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Create socket
-server.bind(ADDR)
+async def HandleBid(websocket, item, bidAmount):                       # Switched to using guard clauses for readability
+                                                                        
+    if not item in auctionItems:
+        print("[ERROR] Item does not exist")
+        nonexistent = json.dumps({"response":"nonexistent"})
+        await websocket.send(nonexistent)
 
-def handle_client(conn, addr):
-    print(f"[NEW CONNECTION] {addr} connected")
+    if auctionItems[item]["units"] <= 0:
+        print("[ERROR] Item out of stock")
+        unavailable = json.dumps({"response":"unavailable"})
+        await websocket.send(unavailable)
 
-    connected = True
-    while connected:
-        msg_length = conn.recv(HEADER).decode(FORMAT)
-        if msg_length:
-            msg_length = int(msg_length)
-            msg = conn.recv(msg_length).decode(FORMAT)
+    if bidAmount <= auctionItems[item]["price"]:
+        print("[REJECTED] Bid not beat current price")
+        rejected = json.dumps({"response":"rejected"})
+        await websocket.send(rejected)
 
+    # If the code reaches this point, then the bid is valid
+
+    print(f"[ACCEPTED] Bid on {item} accepted for {bidAmount}")
+    auctionItems[item]["price"] = bidAmount                        # Update to new highest bid
+    auctionItems[item]["units"] -= 1                                # Decrease available units
+    accepted = json.dumps({"response":"accepted"})
+    await websocket.send(accepted)
+    await BroadcastItems(item, auctionItems[item])
+
+async def HandleNewClient(websocket):
+    try:
+        connectedClients.add(websocket)                     # Add new client to set of connections
+        print(f"[CONNECT] New connection: {websocket}")
+        await websocket.send("[SERVER] Welcome to the Bid!")
+        
+        async for msg in websocket:
             if msg == DISCONNECT_MESSAGE:
-                connected = False
+                connectedClients.remove(websocket)
+                print(f"[DISCONNECT] Client closed connection: {websocket}")
+                return
+            
+            rcvdJson = json.loads(msg)
+            item = rcvdJson["item"]
+            bidAmount = rcvdJson["bid_amount"]
+            await HandleBid(websocket, item, bidAmount)
 
-            print(f"[{addr}] {msg}")
-            conn.send("Message Received".encode(FORMAT))
+    except websockets.exceptions.ConnectionClosed: # Connection closed unexpectedly
+        print(f"[DISCONNECT] Client disconnected unexpectedly: {websocket}")
+        connectedClients.remove(websocket)
 
-    conn.close()
-    
+    finally:
+        print(f"[DISCONNECT] Cleaned up connection: {websocket}")
+        connectedClients.remove(websocket)
 
-def start():
-    server.listen() # Listen for new connections
-    print(f"[LISTENING] Listening on {SERVER}")
-    while True:
-        # Store connection and socket to communicate back
-        conn, addr = server.accept() 
-
-        thread = threading.Thread(target=handle_client, args=(conn, addr))
-        thread.start()
-
-        print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
+async def StartServer():
+    auctionItems = await InventoryGenerator()
+    async with websockets.serve(HandleNewClient, '0.0.0.0', PORT) as server:
+        print(f"[LISTENING] Server listening on port {PORT}")
+        await server.serve_forever()
 
 print("[STARTING]")
-start()
+asyncio.run(StartServer())
