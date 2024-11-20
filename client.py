@@ -1,4 +1,5 @@
 import socket
+from bidder import make_bid, generate_max_bids
 
 HEADER = 64
 PORT = 5050
@@ -21,6 +22,19 @@ def send(msg):
     client.send(message)
 
     print(client.recv(2048).decode(FORMAT))
+
+
+# Example for a client with randomized max bids
+client_max_bids = generate_max_bids(10)  # Generates max bids for 10 items
+
+# Example usage
+item = "Item1"
+current_price = 100
+bid = make_bid(item, current_price, client_max_bids)
+
+if bid is not None:
+    send(f"{item}:{bid}")
+
 
 send("Hello World!")
 send(DISCONNECT_MESSAGE)
