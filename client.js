@@ -142,8 +142,8 @@ function UpdateTable() {
 function UpdateClientBidsTable() {
     //console.log("[YOUR BIDS] Updating your bids and items owned...");
     let str = '<tr>'
+    + '<th>Item</th>'
     + '<th>Wanted</th>'
-    + '<th>Item Name</th>'
     + '<th>Current</th>'
     + '<th>Limit</th>'
     + '<th># Won</th>'
@@ -153,8 +153,8 @@ function UpdateClientBidsTable() {
     for (let item in auctionState) {
 
         str += '<tr>'
-        + '<td>' + (maxBids[item] ? 'Yes' : 'No') + '</td>'
         + '<td>' + item.replace('_',' ') + '</td>'
+        + '<td>' + (maxBids[item] ? 'Yes' : 'No') + '</td>'
         + '<td>' + (currBids[item] ? ('$' + currBids[item]) : 'N/A') + '</td>'
         + '<td>' + (maxBids[item] ? ('$' + maxBids[item]) : 'N/A') + '</td>'
         + '<td>' + (itemsWon[item] == undefined ? 0 : itemsWon[item]) + '</td>'
