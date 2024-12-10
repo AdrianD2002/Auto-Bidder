@@ -7,7 +7,10 @@ let auctionState = [];      // holds the auction state
 let maxBids = [];           // a list of items the bidder wants and the max they'll be willing to pay for them
 let currBids = [];          // a list of items the bidder has bid on and the last amount they bid (to prevent feedback loops where the bidder tries to beat itself)
 let itemsWon = [];          // a list of items the bidder has won and the amount of each
+let itemsWonThisRound = [];
 let isBidding = false;
+let joined = false;
+let status = "- Not Participating -"
 
 /////////////////////////////////////////////////////////////////////// Client<->Server Functions
 
@@ -64,7 +67,9 @@ function HandleServerMessage(message) {
         let item = rcvdJson["item"];
         console.log("[ITEM WON]: " + item);
         itemsWon[item] = itemsWon[item] ? itemsWon[item] + 1 : 1;
+        itemsWonThisRound.push(item)
         isBidding = false;
+        document.getElementById("status").innerHTML = "- Intermission -";
         UpdateClientBidsTable();
     }
     else if (rcvdJson["type"] == "updateQuantities") {
@@ -75,10 +80,12 @@ function HandleServerMessage(message) {
         console.log("[NEW ROUND]")
         auctionState = rcvdJson["items"];
         UpdateTable();
-        InitBids();
+        if (joined) {
+            InitBids();
+        }
     }
     else if (rcvdJson["type"] == "auctionOver") {
-        alert("Auction over!")
+        document.getElementById("status").innerHTML = "- Auction Over! -";
     }
 }
 
@@ -89,7 +96,7 @@ function LeaveAuction() {
     }
 
     document.getElementById("bid_button").innerHTML = '';
-    alert("Left auction.")
+    alert("Left auction.");
     if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(discon);
     } 
@@ -140,6 +147,7 @@ function UpdateClientBidsTable() {
     + '<th>Current</th>'
     + '<th>Limit</th>'
     + '<th># Won</th>'
+    + '<th>Result</th>'
     + '</tr>'
 
     for (let item in auctionState) {
@@ -150,6 +158,7 @@ function UpdateClientBidsTable() {
         + '<td>' + (currBids[item] ? ('$' + currBids[item]) : 'N/A') + '</td>'
         + '<td>' + (maxBids[item] ? ('$' + maxBids[item]) : 'N/A') + '</td>'
         + '<td>' + (itemsWon[item] == undefined ? 0 : itemsWon[item]) + '</td>'
+        + '<td>' + (maxBids[item] ? (isBidding ? '...' : (itemsWonThisRound.includes(item) ? '✅' : '❌')) : 'N/A') + '</td>'
         + '</tr>'
      }
 
@@ -160,6 +169,10 @@ function InitBids() { // Establish desired items and maximum price we are willin
     maxBids = [];   // Reset max bids
     currBids = [];  // Reset current bids
     isBidding = true;
+    joined = true;
+    itemsWonThisRound = [];
+
+    document.getElementById("status").innerHTML = "- In Round -";
 
     console.log("[INIT BID] Updating bids...\n=============================");
     for (let item in auctionState) {

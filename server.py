@@ -137,7 +137,7 @@ async def ManageAuction():
 
         print("[AUCTION ROUND] Bidding round completed.")
 
-        await asyncio.sleep(10) # Allow 10 seconds in between rounds
+        await asyncio.sleep(5) # Allow 10 seconds in between rounds
 
 async def DecideWinner():
     print("[DECIDING WINNERS] Starting winner selection process")
