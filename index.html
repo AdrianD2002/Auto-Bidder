@@ -16,7 +16,13 @@
         </header>
         <div class="main">
             <h2>Auto-Bidder</h2>
-            <div id="display"></div>
+            <div id="display">
+                <table id="auction_state"></table>
+                <table id="client_bids"></table>
+            </div>
+            <div id="bid_button">
+                <button type="button" onclick="InitBids()" >Join Bidding</button>
+            </div>
         </div>
         <div style="height: 100px"></div>
         <footer>

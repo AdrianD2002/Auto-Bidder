@@ -5,7 +5,6 @@ import random
 import websockets
 import asyncio
 
-
 #############################################################################################
 ## Styling Guidlines:                                                                      ##
 ## - For functions: use capital letters for the first letter of each word. ex: NameFunc(). ##
@@ -18,42 +17,19 @@ PORT = 5050
 DISCONNECT_MESSAGE = "!DISCONNECT"
 
 connectedClients = set() # Set of currently connected clients
-listBids = []
 
-###########################################
+auctionItems = {}
+initialPrices = {}
+listCurrBids = []            # List of winning bids per round (resets every round, gets sorted by max bid)
 
-async def InventoryGenerator():
-    print("[INVGEN] Generating Inventory:")
-    items = {}
+########################################### Server<->Client Communication
 
-    for i in range(random.randint(10, 20)): # Sets range of number of items from 10 to 20.
-        itemName = f"Item_{i + 1}" # What item number being displayed.
-        
-        initialPrice = random.randint(50, 500) # Set random initial price between 50 and 500.
-
-        initialUnits = random.randint(1,10) # Set random  initial units between 1 and 10.
-        
-        items[itemName] = { # Dictionary for all items, their price and units associated.
-            "price": initialPrice,
-            "units": initialUnits
-        }
-
-    pprint.pprint(items)
-    return items
-
-async def BroadcastItems(itemName, itemDetail):
-    auctionState = {
-        "type": "auctionState",
-        "items": [
-            {"name": itemName, "price": details["price"], "units": details["units"]}
-            for itemName, details in auctionItems.items()
-        ]
-    }
-
+async def BroadcastItems():
     message = {"type":"auctionState", "items": auctionItems}
 
-    if connectedClients:
-        await asyncio.wait([client.send(message) for client in connectedClients])
+    for websocket in connectedClients:
+        await websocket.send(json.dumps(message))
+
     print("[BROADCAST] Current auction state sent to all clients")
 
 async def HandleBid(websocket, item, bidAmount):                                        
@@ -61,29 +37,33 @@ async def HandleBid(websocket, item, bidAmount):
         print("[ERROR] Item does not exist")
         nonexistent = json.dumps({"type":"bidResult", "response":"nonexistent"})
         await websocket.send(nonexistent)
+        return
 
     if auctionItems[item]["units"] <= 0:
         print("[ERROR] Item out of stock")
         unavailable = json.dumps({"type":"bidResult", "response":"unavailable"})
         await websocket.send(unavailable)
+        return
 
     if bidAmount <= auctionItems[item]["price"]:
         print("[REJECTED] Bid not beat current price")
         rejected = json.dumps({"type":"bidResult", "response":"rejected"})
         await websocket.send(rejected)
+        return
 
     ### If the code reaches this point, then the bid is valid ###
 
     print(f"[ACCEPTED] Bid on {item} accepted for {bidAmount}")
 
     auctionItems[item]["price"] = bidAmount                                         # Update to new highest bid
-    listBids.append({"bidder": websocket, "item": item, "bidAmount": bidAmount})    # Add winning bid to list of bids
-    listBids = sorted(listBids, key=lambda x: x["bidAmount"], reverse=True)         # Sort current bids by descending order of bid amount
+
+    global listCurrBids
+    listCurrBids.append({"bidder": websocket, "item": item, "bidAmount": bidAmount})    # Add winning bid to list of bids
 
     accepted = json.dumps({"type":"bidResult", "response":"accepted"})          # Notify bidder about win
     await websocket.send(accepted)
 
-    await BroadcastItems(item, auctionItems[item])                              # Update all clients about current bid state
+    await BroadcastItems()                              # Update all clients about current bid state
 
 async def HandleNewClient(websocket):
     try:
@@ -101,7 +81,7 @@ async def HandleNewClient(websocket):
                 print(f"[DISCONNECT] Client closed connection: {websocket.remote_address}")
                 return
             
-            print(f'[RECEIVED] {msg}')
+            #print(f'[RECEIVED] {msg}')
             rcvdJson = json.loads(msg)
             item = rcvdJson["item"]
             bidAmount = rcvdJson["bid_amount"]
@@ -115,111 +95,125 @@ async def HandleNewClient(websocket):
         print(f"[DISCONNECT] Cleaned up connection: {websocket.remote_address}")
         connectedClients.discard(websocket)
 
-async def StartServer():
-    global auctionItems 
-    auctionItems = await InventoryGenerator()
-    await Timer() # Begin one minute timer
-    async with websockets.serve(HandleNewClient, '0.0.0.0', PORT) as server:
-        print(f"[LISTENING] Server listening on port {PORT}")
-        await server.serve_forever()
-
-async def Timer():
-    print("[TIMER] Timer starts for 1 minute.")
-    await asyncio.sleep(60)
-    print("[TIMER] 1 minute is up.")
-
-async def DecideWinner():
-    print("[DECIDING WINNERS] Starting winner selection process")
-
-   # Populate bids with actual data #FIXME
-    bids = {item_name: [("client1", 100), ("client2", 150)] for item_name in auctionItems} 
-
-    for item_name, bid_list in bids.items():
-        if not bid_list:
-            print(f"[NO BIDS] No bids received for {item_name}")
-            continue
-
-        sorted_bids = sorted(bid_list, key=lambda x: x[1], reverse=True)
-
-        while auctionItems[item_name]["units"] > 0 and sorted_bids:
-            winning_client, winning_bid = sorted_bids.pop(0)
-
-            print(f"[WINNER] {winning_client} wins {item_name} with a bid of {winning_bid}")
-            
-            auctionItems[item_name]["units"] -= 1
-            await NotifyClients(winning_client, item_name, winning_bid)
-            auctionItems[item_name]["price"] = winning_bid
-
-            winner_message = json.dumps({
-                "type": "winner",
-                "item": item_name,
-                "bid_amount": winning_bid
-            })
-            await winning_client.send(winner_message)
-
-        if auctionItems[item_name]["units"] <= 0:
-            print(f"[OUT OF STOCK] {item_name} is now out of stock.")
-        elif not sorted_bids:
-            print(f"[NO MORE BIDS] No more bids for {item_name}")
-
-    print("[DECIDING WINNERS] Winner selection process completed.")
-
-async def NotifyClients(winning_client=None, winning_item=None, winning_bid=None):
-    # Notify the winning client
-    if winning_client and winning_item and winning_bid:
-        winner_message = json.dumps({
-            "type": "winNotification",
-            "item": winning_item,
-            "bidAmount": winning_bid,
-            "message": f"Congratulations! You won {winning_item} with a bid of {winning_bid}."
-        })
-        await winning_client.send(winner_message)
-        print(f"[NOTIFY WINNER] {winning_client.remote_address} won {winning_item} for {winning_bid}.")
-
-        await BroadcastItems()
-        
-        print("[BROADCAST] Auction state updated and sent to all clients.")
-        
+########################################### Auction Management
 
 async def ManageAuction():
+    global auctionItems
+    global initialPrices
+
     print("[AUCTION] Auction process has started.")
     
     while True:
+
         # Check if there are any items left to auction
-        active_items = {item_name: details for item_name, details in auctionItems.items() if details["units"] > 0}
-        
-        if not active_items:
+        activeItems = False
+        for item in auctionItems:
+            if auctionItems[item]["units"] > 0:
+                activeItems = True
+        if not activeItems:
             print("[AUCTION END] All items have been sold. Auction is now closed.")
             await AnnounceFinalStatus()
             break
 
-        print("[AUCTION ROUND] A new bidding round is starting.")
-        print(f"[ACTIVE ITEMS] Items available for bidding: {list(active_items.keys())}")
+        # Reset prices to original
+        for item in auctionItems:
+            #print(f'Reseting {item} from {auctionItems[item]["price"]} to {initialPrices[item]["price"]}')
+            auctionItems[item]["price"] = initialPrices[item]["price"]
 
-        # Allow time for bids (e.g., 1 minute per round)
-        await asyncio.sleep(60)  # Simulating a round duration
+        message = {"type":"newRound", "items": auctionItems}
+    
+        for websocket in connectedClients:
+            await websocket.send(json.dumps(message))
+
+        print("[AUCTION ROUND] A new bidding round is starting.")
+
+        await asyncio.sleep(5)
 
         # Simulate the selection of winners for items with bids
         await DecideWinner()
 
         # Broadcast updated auction state to all clients
-        await NotifyClients()
+        #await NotifyClients()
 
         print("[AUCTION ROUND] Bidding round completed.")
 
+        await asyncio.sleep(10) # Allow 10 seconds in between rounds
+
+async def DecideWinner():
+    print("[DECIDING WINNERS] Starting winner selection process")
+
+    global listCurrBids
+    listBids = sorted(listCurrBids, key=lambda x: x["bidAmount"], reverse=True)         # Sort current bids by descending order of bid amount
+
+    #pprint.pprint(listBids)
+
+    wonItems = [] # list to keep track of items that were won in the bid (used to ignore losing bids)
+
+    for bid in listBids:
+        if bid["item"] in wonItems: # Item was already accounted for; skip
+            continue
+        
+        global auctionItems
+        wonItem = bid["item"]
+        auctionItems[wonItem]["units"] = auctionItems[wonItem]["units"] - 1
+        wonItems.append(bid["item"])
+
+        winner = bid["bidder"]
+        print(f"[WINNER] Rewarding {wonItem} to client {winner.remote_address}")
+
+        await winner.send(json.dumps({"type":"rewardedItem","item":wonItem}))
+
+    message = {"type":"updateQuantities", "items": auctionItems}
+
+    for websocket in connectedClients:
+        await websocket.send(json.dumps(message))
+
+    listCurrBids = []
+
 async def AnnounceFinalStatus():
     print("[FINAL STATUS] Announcing final status of the auction.")
-    final_status = {
-        "type": "finalStatus",
-        "items": auctionItems
-    }
 
     pprint.pprint(auctionItems)
 
-    if connectedClients:
-        final_message = json.dumps(final_status)
-        await asyncio.wait([client.send(final_message) for client in connectedClients])
-        print("[FINAL STATUS] Sent to all clients.")
+    message = {"type":"auctionOver", "items": auctionItems}
+
+    for websocket in connectedClients:
+        await websocket.send(json.dumps(message))
+
+########################################### Server Initialization
+
+async def InventoryGenerator():
+    print("[INVGEN] Generating Inventory:")
+    global auctionItems
+    global initialPrices
+
+    for i in range(random.randint(5, 10)): # Sets range of number of items from 10 to 20.
+        itemName = f"Item_{i + 1}" # What item number being displayed.
+        
+        initialPrice = random.randint(50, 500) # Set random initial price between 50 and 500.
+
+        initialUnits = random.randint(1,10) # Set random  initial units between 1 and 10.
+        
+        auctionItems[itemName] = { # Dictionary for all items, their price and units associated.
+            "price": initialPrice,
+            "units": initialUnits
+        }
+
+        initialPrices[itemName] = {
+            "price": initialPrice
+        }
+
+    pprint.pprint(auctionItems)
+
+async def StartServer():
+    global auctionItems 
+    await InventoryGenerator()
+    async with websockets.serve(HandleNewClient, '0.0.0.0', PORT) as server:
+        print(f"[LISTENING] Server listening on port {PORT}")
+        await ManageAuction()
+        await server.serve_forever()
+
+########################################### Server Startup Call
 
 print("[STARTING]")
 asyncio.run(StartServer())
