@@ -1,6 +1,6 @@
 import threading
-from client import send  # Assuming `send` is from `client.py`
-from bidder import generate_max_bids, make_bid
+from old.client import send  # Assuming `send` is from `client.py`
+from old.bidder import generate_max_bids, make_bid
 
 # Number of clients to simulate
 num_clients = 5

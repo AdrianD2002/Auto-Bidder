@@ -1,7 +1,7 @@
 import asyncio
 import json
 import websockets
-from bidder import make_bid, generate_max_bids
+from old.bidder import make_bid, generate_max_bids
 
 ADDR = 'ws://localhost:5050'
 DISCONNECT_MESSAGE = "!DISCONNECT"

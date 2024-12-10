@@ -1,0 +1,131 @@
+body {
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    margin: 0;
+    color: #13294b;
+    text-shadow: 2px 3px 5px rgba(0,0,0,0.5);
+    font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+}
+
+button {
+    font-size: 18px;
+    width: 150px;
+    padding: 10px 30px 10px 30px;
+    margin: 10px auto 10px auto;
+    background-color: #13294b;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+    font-size: 18px;
+    text-shadow: 3px 3px black;
+    box-shadow: rgba(0, 0, 0, 0.4) 0px 2px 4px, rgba(0, 0, 0, 0.3) 0px 7px 13px -3px, rgba(0, 0, 0, 0.2) 0px -3px 0px inset;
+}
+
+button:hover {
+    -webkit-transform: scale(1.1);
+    -ms-transform: scale(1.1);
+    transform: scale(1.1);
+    transition:all 0.3s ease;
+}
+
+button:not(:hover) {
+    -webkit-transform: scale(1.0);
+    -ms-transform: scale(1.0);
+    transform: scale(1.0);
+    transition:all 0.3s ease;
+}
+
+button:active {
+    -webkit-transform: scale(1.0);
+    -ms-transform: scale(1.0);
+    transform: scale(1.0);
+    transition:all 0.01s ease;
+}
+
+div {
+    text-align: center;
+    margin: 0px
+
+}
+
+footer {
+    background-color: #13294b;
+    color: white;
+    text-align: center;
+    padding: 10px;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+}
+
+h1, h2 {
+    font-size: 100px;
+    color: white;
+    font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+    -webkit-text-stroke: 2px #13294b;
+    cursor: default;
+}
+
+h2 {
+    font-size: 50px;
+    margin-bottom: 15px;
+}
+
+h3 {
+    margin-top: 0px;
+}
+
+header {
+    display: flex;
+    height: 110px;
+    vertical-align: middle;
+    background: #c8102e;
+}
+
+header > img {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.header_left {
+    height: 0px;
+    margin-left: 10px;
+}
+
+.header_right {
+    height: 0px;
+    margin-right: 10px;
+}
+
+hr {
+    width: 70%;
+}
+
+.main_button {
+    font-size: 30px;
+    width: 30%;
+}
+
+table {
+    border: 1px solid black;
+    border-collapse: collapse;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+table td {
+    border: 1px solid black;
+    width: fit-content;
+    padding: 5px;
+}
+
+table th {
+    color: white;
+    border: 1px solid black;
+    background-color: #13294b;
+    padding: 5px;
+    width: fit-content;
+}
