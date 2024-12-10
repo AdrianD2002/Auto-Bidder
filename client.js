@@ -88,6 +88,8 @@ function LeaveAuction() {
         return;
     }
 
+    document.getElementById("bid_button").innerHTML = '';
+    alert("Left auction.")
     if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(discon);
     } 
